@@ -11,25 +11,30 @@ import {
   hypot,
   lerp,
   noise2D,
+  render3D,
   sin,
   smoothStep,
   vec2,
   vec3,
 } from 'littlejsengine';
 
-export const MAP_SIZE = 160;
+export const MAP_SIZE = 400;
 export const ROAD_WIDTH = 11;
-export const HILL_HEIGHT = 32;
+export const PEAK_HEIGHT = 34;
 export const RIDE_HEIGHT = 0.38;
 
 const SAMPLES = 97;
-const HAIRPINS = 4;
+const HAIRPINS = 7;
 const ROAD_AMP = 38;
 const TURN_RADIUS = 16;
 const Z0 = -50;
 const SHOULDER = 12;
 const STRAIGHT_SAMPLES = 40;
 const TURN_SAMPLES = 36;
+const FINISH_Z = Z0 + (HAIRPINS - 1) * 2 * TURN_RADIUS + 0.6;
+const FLATTEN_RADIUS = 12;
+
+export const finishPos = vec3((HAIRPINS - 1) % 2 === 0 ? -ROAD_AMP : ROAD_AMP, 0, FINISH_Z);
 
 const path: Vector3[] = [];
 export let terrain: HeightMap;
@@ -64,11 +69,16 @@ function buildPath() {
 
 function baseHill(x: number, z: number) {
   const nx = x / (MAP_SIZE / 2);
-  const nz = z / (MAP_SIZE / 2);
-  const climb = clamp((nz + 0.82) / 1.55);
+  const climb = clamp((z - Z0) / (FINISH_Z - Z0));
   const sides = clamp(1 - nx * nx * 1.05);
   const noise = noise2D(x * 0.03, z * 0.03) * 0.12 + noise2D(x * 0.08, z * 0.08) * 0.04;
-  return clamp(climb * sides * (1 + noise));
+  const raw = clamp(climb * sides * (1 + noise));
+  const d = hypot(x - finishPos.x, z - finishPos.z);
+  if (d < FLATTEN_RADIUS) {
+    const top = clamp(1 * (1 - nx * nx * 1.05));
+    return lerp(raw, top, 1 - smoothStep(d / FLATTEN_RADIUS));
+  }
+  return raw;
 }
 
 export function roadDistance(x: number, z: number) {
@@ -123,7 +133,7 @@ export function buildHill() {
     colors.push(colorRow);
   }
 
-  terrain = new HeightMap(heights, vec2(MAP_SIZE), HILL_HEIGHT, colors, vec3(), true);
+  terrain = new HeightMap(heights, vec2(MAP_SIZE), PEAK_HEIGHT, colors, vec3(), true);
 
   const points: Vector3[] = [];
   for (const p of path) {
@@ -133,6 +143,12 @@ export function buildHill() {
   }
   const road = new EngineObject3D(vec3(), buildRibbon(points, ROAD_WIDTH, hsl(0, 0, 0.18)));
   road.castShadow = false;
+
+  const finishY = terrain.getHeight(finishPos) + 0.14;
+  const finish = new EngineObject3D(finishPos, render3D.planeMesh, undefined, hsl(0.35, 0.65, 0.58));
+  finish.pos3D.y = finishY;
+  finish.scale3D = vec3(12, 1, 12);
+  finish.castShadow = false;
 
   return terrain;
 }
