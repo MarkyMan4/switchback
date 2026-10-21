@@ -3,7 +3,10 @@ import {
   EngineObject3D,
   HeightMap,
   PI,
+  ParticleEmitter3D,
+  abs,
   atan2,
+  buildGrid,
   buildRibbon,
   clamp,
   cos,
@@ -11,7 +14,6 @@ import {
   hypot,
   lerp,
   noise2D,
-  render3D,
   sin,
   smoothStep,
   vec2,
@@ -31,12 +33,15 @@ const Z0 = -50;
 const SHOULDER = 12;
 const STRAIGHT_SAMPLES = 40;
 const TURN_SAMPLES = 36;
-const FINISH_Z = Z0 + (HAIRPINS - 1) * 2 * TURN_RADIUS + 0.6;
+const END_Z = Z0 + (HAIRPINS - 1) * 2 * TURN_RADIUS;
+const FINISH_LENGTH = 8;
 const FLATTEN_RADIUS = 12;
 
-export const finishPos = vec3((HAIRPINS - 1) % 2 === 0 ? -ROAD_AMP : ROAD_AMP, 0, FINISH_Z);
+const finishPos = vec3();
 
 const path: Vector3[] = [];
+let endDirX = 1;
+let endDirZ = 0;
 export let terrain: HeightMap;
 
 function buildPath() {
@@ -65,11 +70,28 @@ function buildPath() {
       }
     }
   }
+  const end = path[path.length - 1];
+  const prev = path[path.length - 2];
+  const dx = end.x - prev.x;
+  const dz = end.z - prev.z;
+  const len = hypot(dx, dz);
+  endDirX = dx / len;
+  endDirZ = dz / len;
+  finishPos.x = end.x - endDirX * (FINISH_LENGTH / 2);
+  finishPos.z = end.z - endDirZ * (FINISH_LENGTH / 2);
+}
+
+function cappedRoadDistance(x: number, z: number, bestI: number, bestD: number) {
+  if (bestI !== path.length - 1) return bestD;
+  const end = path[bestI];
+  const past = (x - end.x) * endDirX + (z - end.z) * endDirZ;
+  if (past <= 0) return bestD;
+  return Math.max(bestD, ROAD_WIDTH / 2 + past);
 }
 
 function baseHill(x: number, z: number) {
   const nx = x / (MAP_SIZE / 2);
-  const climb = clamp((z - Z0) / (FINISH_Z - Z0));
+  const climb = clamp((z - Z0) / (END_Z - Z0));
   const sides = clamp(1 - nx * nx * 1.05);
   const noise = noise2D(x * 0.03, z * 0.03) * 0.12 + noise2D(x * 0.08, z * 0.08) * 0.04;
   const raw = clamp(climb * sides * (1 + noise));
@@ -83,11 +105,48 @@ function baseHill(x: number, z: number) {
 
 export function roadDistance(x: number, z: number) {
   let best = 1e9;
-  for (const p of path) {
-    const d = hypot(x - p.x, z - p.z);
-    if (d < best) best = d;
+  let bestI = 0;
+  for (let i = 0; i < path.length; i++) {
+    const d = hypot(x - path[i].x, z - path[i].z);
+    if (d < best) {
+      best = d;
+      bestI = i;
+    }
   }
-  return best;
+  return cappedRoadDistance(x, z, bestI, best);
+}
+
+export function atFinish(x: number, z: number) {
+  return abs(x - finishPos.x) <= FINISH_LENGTH / 2 && abs(z - finishPos.z) <= ROAD_WIDTH / 2;
+}
+
+export function celebrateFinish() {
+  const pos = vec3(finishPos.x, terrain.getHeight(finishPos) + 1.8, finishPos.z);
+  for (const hue of [0, 0.1, 0.16, 0.33, 0.58, 0.78]) {
+    const confetti = new ParticleEmitter3D(
+      pos,
+      vec3(FINISH_LENGTH, 1, ROAD_WIDTH),
+      2.8,
+      70,
+      1.35,
+      undefined,
+      hsl(hue, 0.9, 0.62),
+      hsl(hue, 0.85, 0.48),
+      hsl(hue, 0.75, 0.55, 0),
+      hsl(hue, 0.75, 0.4, 0),
+      2.2,
+      0.55,
+      0.28,
+      0.18,
+      0.99,
+      -0.005,
+      0.35,
+      0.45,
+    );
+    confetti.angleSpeed = 0.28;
+    confetti.castShadow = false;
+    for (let n = 0; n < 12; n++) confetti.emitParticle();
+  }
 }
 
 export function startPose() {
@@ -123,6 +182,7 @@ export function buildHill() {
         }
       }
       const rp = path[bestI];
+      bestD = cappedRoadDistance(x, z, bestI, bestD);
       const blend = smoothStep(clamp((bestD - ROAD_WIDTH / 2) / SHOULDER));
       heightRow.push(lerp(baseHill(rp.x, rp.z), hill, blend));
       if (bestD < ROAD_WIDTH / 2) colorRow.push(asphalt);
@@ -144,10 +204,15 @@ export function buildHill() {
   const road = new EngineObject3D(vec3(), buildRibbon(points, ROAD_WIDTH, hsl(0, 0, 0.18)));
   road.castShadow = false;
 
-  const finishY = terrain.getHeight(finishPos) + 0.14;
-  const finish = new EngineObject3D(finishPos, render3D.planeMesh, undefined, hsl(0.35, 0.65, 0.58));
-  finish.pos3D.y = finishY;
-  finish.scale3D = vec3(12, 1, 12);
+  const light = hsl(0, 0, 0.95);
+  const dark = hsl(0, 0, 0.14);
+  const finish = new EngineObject3D(
+    finishPos,
+    buildGrid(vec2(FINISH_LENGTH, ROAD_WIDTH), vec2(FINISH_LENGTH, ROAD_WIDTH), (x, z) =>
+      (Math.floor(x) + Math.floor(z)) & 1 ? light : dark,
+    ),
+  );
+  finish.pos3D.y = terrain.getHeight(finishPos) + 0.16;
   finish.castShadow = false;
 
   return terrain;

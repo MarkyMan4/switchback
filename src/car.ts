@@ -32,6 +32,7 @@ export class Car extends EngineObject3D {
   driftCharge = 0;
   boostTime = 0;
   drifting = false;
+  locked = false;
   slide = vec3();
   wheels: EngineObject3D[] = [];
   sparks: ParticleEmitter3D[] = [];
@@ -88,7 +89,13 @@ export class Car extends EngineObject3D {
   update() {
     const input = keyDirection();
     const offRoad = roadDistance(this.pos3D.x, this.pos3D.z) - ROAD_WIDTH / 2;
-    const space = keyIsDown('Space');
+    if (this.locked) {
+      input.x = 0;
+      input.y = 0;
+      this.drifting = false;
+      this.driftCharge = 0;
+    }
+    const space = keyIsDown('Space') && !this.locked;
     if (space && this.speed > 0.1 && (this.drifting || input.x)) {
       if (!this.drifting) this.driftDir = sign(input.x);
       this.drifting = true;
@@ -107,6 +114,7 @@ export class Car extends EngineObject3D {
     const maxFwd = (offRoad < 0 ? 0.45 : 0.22) + (boosting ? 0.22 : 0);
     this.speed += input.y * (boosting ? 0.016 : 0.01);
     this.speed *= offRoad < 0 ? (boosting ? 0.993 : 0.99) : 0.95;
+    if (this.locked) this.speed *= 0.8;
     this.speed = clamp(this.speed, -0.12, maxFwd);
 
     const inward = input.x * this.driftDir;
