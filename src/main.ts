@@ -7,6 +7,7 @@ import {
   keyWasPressed,
   mainCanvasSize,
   render3D,
+  timeDelta,
   Render3DPlugin,
   setCanvasClearColor,
   vec2,
@@ -19,12 +20,24 @@ setCanvasClearColor(hsl(0.55, 0.4, 0.72));
 
 let car: Car;
 let cleared = false;
+let raceStarted = false;
+let raceTime = 0;
+
+function formatRaceTime(seconds: number) {
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds - mins * 60;
+  const whole = Math.floor(secs);
+  const hundredths = Math.floor((secs - whole) * 100);
+  return `${mins}:${String(whole).padStart(2, '0')}.${String(hundredths).padStart(2, '0')}`;
+}
 
 function startLevel() {
   buildHill();
   const start = startPose();
   start.pos.y = terrain.getHeight(start.pos) + RIDE_HEIGHT;
   car = new Car(start.pos, start.yaw);
+  raceStarted = false;
+  raceTime = 0;
 }
 
 function gameInit() {
@@ -58,6 +71,9 @@ function gameUpdate() {
 }
 
 function gameUpdatePost() {
+  if (!raceStarted && car.speed !== 0) raceStarted = true;
+  if (raceStarted && !cleared) raceTime += timeDelta;
+
   const target = car.pos3D.add(vec3(0, 2, 0));
   render3D.camera.follow(target, vec3(0, 2, 10).rotateY(car.yaw), 0.15);
   render3D.shadowCenter = car.pos3D;
@@ -68,14 +84,15 @@ function gameRender() {}
 function gameRenderPost() {
   if (cleared) {
     drawTextScreen(
-      'Finish!\nPress space to go to the next level',
-      vec2(mainCanvasSize.x / 2, 78),
+      `Finish!\n${formatRaceTime(raceTime)}\nPress space to go to the next level`,
+      vec2(mainCanvasSize.x / 2, 96),
       36,
       WHITE,
       5,
     );
     return;
   }
+  drawTextScreen(formatRaceTime(raceTime), vec2(mainCanvasSize.x / 2, 36), 32, WHITE, 4);
   drawTextScreen(
     'arrows / WASD: drive   space: drift',
     vec2(mainCanvasSize.x / 2, mainCanvasSize.y - 36),

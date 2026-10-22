@@ -20,8 +20,11 @@ import { MAP_SIZE, RIDE_HEIGHT, ROAD_WIDTH, roadDistance, terrain } from './hill
 const BODY = hsl(0.02, 0.82, 0.48);
 const CABIN = hsl(0.58, 0.15, 0.18);
 const WHEEL = hsl(0, 0, 0.12);
-const CHARGE_FRAMES = 50;
-const BOOST_FRAMES = 42;
+const TURBOS = [
+  { charge: 250, frames: 37, kick: 0.07, bonus: 0.1, hue: 0.58 },
+  { charge: 660, frames: 100, kick: 0.13, bonus: 0.2, hue: 0.07 },
+  { charge: 1100, frames: 180, kick: 0.34, bonus: 0.5, hue: 0.82 },
+];
 
 export class Car extends EngineObject3D {
   speed = 0;
@@ -31,11 +34,13 @@ export class Car extends EngineObject3D {
   driftDir = 0;
   driftCharge = 0;
   boostTime = 0;
+  boostLevel = 0;
   drifting = false;
   locked = false;
   slide = vec3();
   wheels: EngineObject3D[] = [];
   sparks: ParticleEmitter3D[] = [];
+  flames: ParticleEmitter3D[] = [];
 
   constructor(pos: Vector3, yaw: number) {
     super(pos);
@@ -84,6 +89,34 @@ export class Car extends EngineObject3D {
       this.addChild(sparks);
       this.sparks.push(sparks);
     }
+
+    for (const x of [-0.38, 0.38]) {
+      const flames = new ParticleEmitter3D(
+        vec3(x, 0.16, 1.95),
+        0.18,
+        0,
+        0,
+        0.4,
+        undefined,
+        hsl(0.12, 1, 0.62),
+        hsl(0.07, 1, 0.52),
+        hsl(0.02, 1, 0.4, 0),
+        hsl(0.04, 1, 0.35, 0),
+        0.4,
+        0.5,
+        0.1,
+        0.22,
+        0.94,
+        0.004,
+        0.45,
+        0.4,
+        true,
+      );
+      flames.rotation3D.x = PI / 2;
+      flames.castShadow = false;
+      this.addChild(flames);
+      this.flames.push(flames);
+    }
   }
 
   update() {
@@ -94,24 +127,37 @@ export class Car extends EngineObject3D {
       input.y = 0;
       this.drifting = false;
       this.driftCharge = 0;
+      this.boostTime = 0;
+      this.boostLevel = 0;
     }
     const space = keyIsDown('Space') && !this.locked;
     if (space && this.speed > 0.1 && (this.drifting || input.x)) {
       if (!this.drifting) this.driftDir = sign(input.x);
       this.drifting = true;
-      this.driftCharge += 1;
+      this.driftCharge += input.x * this.driftDir > 0 ? 5 : 2;
+      if (this.driftCharge > TURBOS[2].charge) this.driftCharge = TURBOS[2].charge;
     } else {
-      if (this.drifting && this.driftCharge >= CHARGE_FRAMES) {
-        this.boostTime = BOOST_FRAMES;
-        this.speed += 0.16;
+      if (this.drifting) {
+        let tier = 0;
+        for (let i = 0; i < TURBOS.length; i++) if (this.driftCharge >= TURBOS[i].charge) tier = i + 1;
+        if (tier > 0) {
+          const turbo = TURBOS[tier - 1];
+          this.boostTime = turbo.frames;
+          this.boostLevel = tier;
+          this.speed += turbo.kick;
+        }
       }
       this.drifting = false;
       this.driftCharge = 0;
     }
 
-    if (this.boostTime > 0) this.boostTime -= 1;
+    if (this.boostTime > 0) {
+      this.boostTime -= 1;
+      if (this.boostTime === 0) this.boostLevel = 0;
+    }
     const boosting = this.boostTime > 0;
-    const maxFwd = (offRoad < 0 ? 0.45 : 0.22) + (boosting ? 0.22 : 0);
+    const bonus = this.boostLevel > 0 ? TURBOS[this.boostLevel - 1].bonus : 0;
+    const maxFwd = (offRoad < 0 ? 0.45 : 0.22) + (boosting ? bonus : 0);
     this.speed += input.y * (boosting ? 0.016 : 0.01);
     this.speed *= offRoad < 0 ? (boosting ? 0.993 : 0.99) : 0.95;
     if (this.locked) this.speed *= 0.8;
@@ -144,7 +190,23 @@ export class Car extends EngineObject3D {
       wheel.rotation3D = vec3(this.spin, steer, PI / 2);
     }
 
-    const sparkRate = this.drifting ? (this.driftCharge >= CHARGE_FRAMES ? 140 : 80) : 0;
-    for (const sparks of this.sparks) sparks.emitRate = sparkRate;
+    let tier = 0;
+    if (this.drifting) for (let i = 0; i < TURBOS.length; i++) if (this.driftCharge >= TURBOS[i].charge) tier = i + 1;
+    const hue = tier === 0 ? 0.13 : TURBOS[tier - 1].hue;
+    const sparkRate = this.drifting ? 50 + tier * 45 : 0;
+    for (const sparks of this.sparks) {
+      sparks.emitRate = sparkRate;
+      sparks.sizeStart = 0.1 + tier * 0.05;
+      sparks.colorStartA = hsl(hue, 1, tier === 0 ? 0.55 : 0.65);
+      sparks.colorStartB = hsl(hue, 1, tier === 0 ? 0.4 : 0.5);
+      sparks.colorEndA = hsl(hue, 1, 0.45, 0);
+      sparks.colorEndB = hsl(hue, 0.9, 0.3, 0);
+    }
+
+    const flameRate = this.drifting || this.boostLevel === 0 ? 0 : 160 + this.boostLevel * 80;
+    for (const flames of this.flames) {
+      flames.emitRate = flameRate;
+      flames.sizeStart = 0.24 + this.boostLevel * 0.16;
+    }
   }
 }
