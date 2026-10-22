@@ -1,7 +1,7 @@
 import { defineConfig } from 'vite';
 
-export default defineConfig({
-  base: './',
+export default defineConfig(({ command }) => ({
+  base: command === 'build' ? '/switchback/' : '/',
   plugins: [
     {
       name: 'littlejs-full-reload',
@@ -14,4 +14,4 @@ export default defineConfig({
       },
     },
   ],
-});
+}));
