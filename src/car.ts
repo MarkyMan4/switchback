@@ -127,7 +127,7 @@ export class Car extends EngineObject3D {
 
     for (const x of [-track, track]) {
       const smoke = new ParticleEmitter3D(
-        vec3(x, 0.12, wheelbase),
+        vec3(x, 0.28, wheelbase),
         0.35,
         0,
         0,
@@ -249,14 +249,14 @@ export class Car extends EngineObject3D {
 
     const worn = this.tireHealth < 50;
     const critical = this.tireHealth < 10;
-    const smokeRate = !worn ? 0 : critical ? 110 : 28;
+    const smokeRate = !worn ? 0 : critical ? 110 : 48;
     for (const smoke of this.smoke) {
       smoke.emitRate = smokeRate;
-      smoke.sizeStart = critical ? 0.62 : 0.32;
-      smoke.sizeEnd = critical ? 2.1 : 1.15;
-      smoke.speed = critical ? 0.03 : 0.018;
-      smoke.colorStartA = hsl(0.08, 0.05, critical ? 0.42 : 0.55, critical ? 0.62 : 0.5);
-      smoke.colorStartB = hsl(0.06, 0.04, critical ? 0.22 : 0.38, critical ? 0.5 : 0.4);
+      smoke.sizeStart = critical ? 0.62 : 0.42;
+      smoke.sizeEnd = critical ? 2.1 : 1.55;
+      smoke.speed = critical ? 0.03 : 0.022;
+      smoke.colorStartA = hsl(0.08, 0.05, critical ? 0.42 : 0.58, critical ? 0.62 : 0.55);
+      smoke.colorStartB = hsl(0.06, 0.04, critical ? 0.22 : 0.42, critical ? 0.5 : 0.45);
     }
   }
 }
