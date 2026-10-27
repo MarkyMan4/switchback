@@ -15,6 +15,7 @@ import {
 } from 'littlejsengine';
 import { Car } from './car.ts';
 import { RIDE_HEIGHT, atFinish, buildHill, celebrateFinish, startPose, terrain } from './hill.ts';
+import { LEVELS } from './levels.ts';
 
 setCanvasClearColor(hsl(0.55, 0.4, 0.72));
 
@@ -22,6 +23,13 @@ let car: Car;
 let cleared = false;
 let raceStarted = false;
 let raceTime = 0;
+let levelIndex = 0;
+
+function initialLevelIndex() {
+  const param = Number(new URLSearchParams(location.search).get('level'));
+  if (Number.isInteger(param) && param >= 1 && param <= LEVELS.length) return param - 1;
+  return 0;
+}
 
 function formatRaceTime(seconds: number) {
   const mins = Math.floor(seconds / 60);
@@ -31,8 +39,13 @@ function formatRaceTime(seconds: number) {
   return `${mins}:${String(whole).padStart(2, '0')}.${String(hundredths).padStart(2, '0')}`;
 }
 
+function levelLabel() {
+  const level = LEVELS[levelIndex];
+  return `Level ${levelIndex + 1}  ${level.name}`;
+}
+
 function startLevel() {
-  buildHill();
+  buildHill(LEVELS[levelIndex]);
   const start = startPose();
   start.pos.y = terrain.getHeight(start.pos) + RIDE_HEIGHT;
   car = new Car(start.pos, start.yaw);
@@ -50,6 +63,7 @@ function gameInit() {
   render3D.shadowRange = 90;
   render3D.shadowMapSize = 2048;
 
+  levelIndex = initialLevelIndex();
   startLevel();
   render3D.camera.follow(car.pos3D, vec3(0, 5, 12).rotateY(car.yaw));
 }
@@ -58,6 +72,7 @@ function gameUpdate() {
   if (cleared) {
     if (keyWasPressed('Space')) {
       cleared = false;
+      levelIndex = (levelIndex + 1) % LEVELS.length;
       engineObjectsDestroy();
       startLevel();
     }
@@ -83,16 +98,19 @@ function gameRender() {}
 
 function gameRenderPost() {
   if (cleared) {
+    const last = levelIndex === LEVELS.length - 1;
+    const prompt = last ? 'Press space to play again from level 1' : 'Press space to go to the next level';
     drawTextScreen(
-      `Finish!\n${formatRaceTime(raceTime)}\nPress space to go to the next level`,
-      vec2(mainCanvasSize.x / 2, 96),
+      `${levelLabel()}\nFinish!\n${formatRaceTime(raceTime)}\n${prompt}`,
+      vec2(mainCanvasSize.x / 2, 108),
       36,
       WHITE,
       5,
     );
     return;
   }
-  drawTextScreen(formatRaceTime(raceTime), vec2(mainCanvasSize.x / 2, 36), 32, WHITE, 4);
+  drawTextScreen(levelLabel(), vec2(mainCanvasSize.x / 2, 28), 26, WHITE, 4);
+  drawTextScreen(formatRaceTime(raceTime), vec2(mainCanvasSize.x / 2, 62), 32, WHITE, 4);
   drawTextScreen(
     'arrows / WASD: drive   space: drift',
     vec2(mainCanvasSize.x / 2, mainCanvasSize.y - 36),
