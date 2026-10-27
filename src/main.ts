@@ -14,7 +14,7 @@ import {
   vec3,
 } from 'littlejsengine';
 import { Car } from './car.ts';
-import { RIDE_HEIGHT, atFinish, buildHill, celebrateFinish, startPose, terrain } from './hill.ts';
+import { RIDE_HEIGHT, atFinish, buildHill, celebrateFinish, hillCenter, startPose, terrain } from './hill.ts';
 import { LEVELS } from './levels.ts';
 
 setCanvasClearColor(hsl(0.55, 0.4, 0.72));
@@ -25,10 +25,18 @@ let raceStarted = false;
 let raceTime = 0;
 let levelIndex = 0;
 
+function queryParams() {
+  return new URLSearchParams(location.search);
+}
+
 function initialLevelIndex() {
-  const param = Number(new URLSearchParams(location.search).get('level'));
+  const param = Number(queryParams().get('level'));
   if (Number.isInteger(param) && param >= 1 && param <= LEVELS.length) return param - 1;
   return 0;
+}
+
+function overviewMode() {
+  return queryParams().has('overview');
 }
 
 function formatRaceTime(seconds: number) {
@@ -65,6 +73,7 @@ function gameInit() {
 
   levelIndex = initialLevelIndex();
   startLevel();
+  if (overviewMode()) render3D.setFog(280, 520);
   render3D.camera.follow(car.pos3D, vec3(0, 5, 12).rotateY(car.yaw));
 }
 
@@ -88,6 +97,13 @@ function gameUpdate() {
 function gameUpdatePost() {
   if (!raceStarted && car.speed !== 0) raceStarted = true;
   if (raceStarted && !cleared) raceTime += timeDelta;
+
+  if (overviewMode()) {
+    const look = hillCenter();
+    render3D.camera.follow(look, vec3(90, 70, 110), 1);
+    render3D.shadowCenter = look;
+    return;
+  }
 
   const target = car.pos3D.add(vec3(0, 2, 0));
   render3D.camera.follow(target, vec3(0, 2, 10).rotateY(car.yaw), 0.15);

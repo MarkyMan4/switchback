@@ -163,6 +163,10 @@ export function startPose() {
   return { pos: a.copy(), yaw: atan2(a.x - b.x, a.z - b.z) };
 }
 
+export function hillCenter() {
+  return vec3(0, 4, (z0 + endZ) / 2);
+}
+
 export function buildHill(level: LevelDef) {
   buildPath(level);
 

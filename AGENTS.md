@@ -32,7 +32,7 @@ src/levels.ts               Level list and path parameters
 vite.config.ts              base: './' (dev) / '/switchback/' (build) and full reload on save
 ```
 
-Add a level by pushing another `LevelDef` onto `LEVELS` in `src/levels.ts`. `hairpins`, `z0`, `roadAmp`, and `turnRadius` define the track; `roadAmp` and `turnRadius` may be a number or `(t) => number` where `t` is 0 at the first hairpin and 1 at the last. Completing a level (space on the finish screen) loads the next entry and wraps to level 1. `?level=2` starts on that level. Production builds use Vite `base: '/switchback/'`.
+Add a level by pushing another `LevelDef` onto `LEVELS` in `src/levels.ts`. `hairpins`, `z0`, `roadAmp`, and `turnRadius` define the track; `roadAmp` and `turnRadius` may be a number or `(t) => number` where `t` is 0 at the first hairpin and 1 at the last. Completing a level (space on the finish screen) loads the next entry and wraps to level 1. `?level=2` starts on that level. `?overview=1` (optionally with `level`) frames the whole hill so you can check a new layout. Production builds use Vite `base: '/switchback/'`.
 
 No tilesheet. Game objects are meshes from `buildBox`, `buildCylinder`, and similar.
 
