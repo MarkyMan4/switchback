@@ -25,11 +25,14 @@ bun run preview
 ## Layout
 
 ```
-src/main.ts                 LittleJS callbacks, chase camera, engineInit
+src/main.ts                 LittleJS callbacks, chase camera, engineInit, level flow
 src/car.ts                  Car mesh and arcade driving
-src/hill.ts                 Height-map hill and switchback road
-vite.config.ts              base: './' and full reload on save
+src/hill.ts                 Height-map hill and switchback road from a LevelDef
+src/levels.ts               Level list and path parameters
+vite.config.ts              base: './' (dev) / '/switchback/' (build) and full reload on save
 ```
+
+Add a level by pushing another `LevelDef` onto `LEVELS` in `src/levels.ts`. `hairpins`, `z0`, `roadAmp`, and `turnRadius` define the track; `roadAmp` and `turnRadius` may be a number or `(t) => number` where `t` is 0 at the first hairpin and 1 at the last. Completing a level (space on the finish screen) loads the next entry and wraps to level 1. `?level=2` starts on that level. `?overview=1` (optionally with `level`) frames the whole hill so you can check a new layout. Production builds use Vite `base: '/switchback/'`.
 
 No tilesheet. Game objects are meshes from `buildBox`, `buildCylinder`, and similar.
 

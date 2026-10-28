@@ -19,6 +19,7 @@ import {
   vec2,
   vec3,
 } from 'littlejsengine';
+import { sampleLevelParam, type LevelDef } from './levels.ts';
 
 export const MAP_SIZE = 400;
 export const ROAD_WIDTH = 11;
@@ -26,36 +27,39 @@ export const PEAK_HEIGHT = 34;
 export const RIDE_HEIGHT = 0.38;
 
 const SAMPLES = 97;
-const HAIRPINS = 7;
-const ROAD_AMP = 38;
-const TURN_RADIUS = 16;
-const Z0 = -50;
 const SHOULDER = 12;
 const STRAIGHT_SAMPLES = 40;
 const TURN_SAMPLES = 36;
-const END_Z = Z0 + (HAIRPINS - 1) * 2 * TURN_RADIUS;
 const FINISH_LENGTH = 8;
 const FLATTEN_RADIUS = 12;
 
 const finishPos = vec3();
 
 const path: Vector3[] = [];
+let z0 = -50;
+let endZ = 142;
 let endDirX = 1;
 let endDirZ = 0;
 export let terrain: HeightMap;
 
-function buildPath() {
+function buildPath(level: LevelDef) {
   path.length = 0;
-  for (let i = 0; i < HAIRPINS; i++) {
-    const z = Z0 + i * 2 * TURN_RADIUS;
+  z0 = level.z0;
+  let z = z0;
+  for (let i = 0; i < level.hairpins; i++) {
+    const t = level.hairpins <= 1 ? 0 : i / (level.hairpins - 1);
+    const tNext = level.hairpins <= 1 ? 0 : (i + 1) / (level.hairpins - 1);
+    const amp = sampleLevelParam(level.roadAmp, t);
+    const ampNext = sampleLevelParam(level.roadAmp, tNext);
+    const radius = sampleLevelParam(level.turnRadius, t);
     const goingRight = i % 2 === 0;
-    const x0 = goingRight ? -ROAD_AMP : ROAD_AMP;
-    const x1 = goingRight ? ROAD_AMP : -ROAD_AMP;
+    const x0 = goingRight ? -amp : amp;
+    const x1 = goingRight ? amp : -amp;
     for (let s = 0; s < STRAIGHT_SAMPLES; s++) {
       if (i > 0 && s === 0) continue;
       path.push(vec3(lerp(x0, x1, s / STRAIGHT_SAMPLES), 0, z));
     }
-    if (i >= HAIRPINS - 1) {
+    if (i >= level.hairpins - 1) {
       path.push(vec3(x1, 0, z));
       continue;
     }
@@ -63,13 +67,17 @@ function buildPath() {
       const u = s / TURN_SAMPLES;
       if (goingRight) {
         const a = lerp(-PI / 2, PI / 2, u);
-        path.push(vec3(ROAD_AMP + TURN_RADIUS * cos(a), 0, z + TURN_RADIUS + TURN_RADIUS * sin(a)));
+        const xOuter = lerp(amp, ampNext, u);
+        path.push(vec3(xOuter + radius * cos(a), 0, z + radius + radius * sin(a)));
       } else {
         const a = lerp(PI / 2, PI * 1.5, u);
-        path.push(vec3(-ROAD_AMP + TURN_RADIUS * cos(a), 0, z + TURN_RADIUS - TURN_RADIUS * sin(a)));
+        const xOuter = lerp(-amp, -ampNext, u);
+        path.push(vec3(xOuter + radius * cos(a), 0, z + radius - radius * sin(a)));
       }
     }
+    z += 2 * radius;
   }
+  endZ = z;
   const end = path[path.length - 1];
   const prev = path[path.length - 2];
   const dx = end.x - prev.x;
@@ -91,7 +99,7 @@ function cappedRoadDistance(x: number, z: number, bestI: number, bestD: number) 
 
 function baseHill(x: number, z: number) {
   const nx = x / (MAP_SIZE / 2);
-  const climb = clamp((z - Z0) / (END_Z - Z0));
+  const climb = clamp((z - z0) / (endZ - z0));
   const sides = clamp(1 - nx * nx * 1.05);
   const noise = noise2D(x * 0.03, z * 0.03) * 0.12 + noise2D(x * 0.08, z * 0.08) * 0.04;
   const raw = clamp(climb * sides * (1 + noise));
@@ -155,8 +163,12 @@ export function startPose() {
   return { pos: a.copy(), yaw: atan2(a.x - b.x, a.z - b.z) };
 }
 
-export function buildHill() {
-  buildPath();
+export function hillCenter() {
+  return vec3(0, 4, (z0 + endZ) / 2);
+}
+
+export function buildHill(level: LevelDef) {
+  buildPath(level);
 
   const heights: number[][] = [];
   const colors: Color[][] = [];
