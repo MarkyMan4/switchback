@@ -1,5 +1,7 @@
 import {
+  BLACK,
   WHITE,
+  drawRect,
   drawTextScreen,
   engineInit,
   engineObjectsDestroy,
@@ -13,7 +15,7 @@ import {
   vec2,
   vec3,
 } from 'littlejsengine';
-import { Car } from './car.ts';
+import { Car, TIRE_HEALTH_MAX } from './car.ts';
 import { RIDE_HEIGHT, atFinish, buildHill, celebrateFinish, hillCenter, startPose, terrain } from './hill.ts';
 import { LEVELS } from './levels.ts';
 
@@ -21,6 +23,7 @@ setCanvasClearColor(hsl(0.55, 0.4, 0.72));
 
 let car: Car;
 let cleared = false;
+let blownTires = false;
 let raceStarted = false;
 let raceTime = 0;
 let levelIndex = 0;
@@ -57,8 +60,35 @@ function startLevel() {
   const start = startPose();
   start.pos.y = terrain.getHeight(start.pos) + RIDE_HEIGHT;
   car = new Car(start.pos, start.yaw);
+  blownTires = false;
   raceStarted = false;
   raceTime = 0;
+}
+
+function restartLevel() {
+  cleared = false;
+  engineObjectsDestroy();
+  startLevel();
+}
+
+function tireBarColor() {
+  if (car.tireHealth < 10) return hsl(0.02, 0.85, 0.52);
+  if (car.tireHealth < 50) return hsl(0.1, 0.9, 0.52);
+  return hsl(0.32, 0.7, 0.48);
+}
+
+function drawTireHud() {
+  const center = vec2(mainCanvasSize.x / 2, 96);
+  const size = vec2(240, 16);
+  const inner = vec2(size.x - 6, size.y - 6);
+  const fillWidth = inner.x * (car.tireHealth / TIRE_HEALTH_MAX);
+  drawRect(center, size, BLACK, 0, false, true);
+  drawRect(center, vec2(size.x - 4, size.y - 4), hsl(0, 0, 0.12), 0, false, true);
+  if (fillWidth > 0) {
+    const left = center.x - inner.x / 2;
+    drawRect(vec2(left + fillWidth / 2, center.y), vec2(fillWidth, inner.y), tireBarColor(), 0, false, true);
+  }
+  drawTextScreen('TIRES', vec2(center.x, center.y), 12, WHITE, 3);
 }
 
 function gameInit() {
@@ -87,6 +117,15 @@ function gameUpdate() {
     }
     return;
   }
+  if (blownTires) {
+    if (keyWasPressed('Space')) restartLevel();
+    return;
+  }
+  if (car.tireHealth <= 0) {
+    blownTires = true;
+    car.locked = true;
+    return;
+  }
   if (atFinish(car.pos3D.x, car.pos3D.z)) {
     cleared = true;
     car.locked = true;
@@ -96,7 +135,7 @@ function gameUpdate() {
 
 function gameUpdatePost() {
   if (!raceStarted && car.speed !== 0) raceStarted = true;
-  if (raceStarted && !cleared) raceTime += timeDelta;
+  if (raceStarted && !cleared && !blownTires) raceTime += timeDelta;
 
   if (overviewMode()) {
     const look = hillCenter();
@@ -125,8 +164,21 @@ function gameRenderPost() {
     );
     return;
   }
+  if (blownTires) {
+    drawTextScreen(levelLabel(), vec2(mainCanvasSize.x / 2, 28), 26, WHITE, 4);
+    drawTireHud();
+    drawTextScreen(
+      'Tires blown!\nPress space to restart',
+      vec2(mainCanvasSize.x / 2, 160),
+      36,
+      WHITE,
+      5,
+    );
+    return;
+  }
   drawTextScreen(levelLabel(), vec2(mainCanvasSize.x / 2, 28), 26, WHITE, 4);
   drawTextScreen(formatRaceTime(raceTime), vec2(mainCanvasSize.x / 2, 62), 32, WHITE, 4);
+  drawTireHud();
   drawTextScreen(
     'arrows / WASD: drive   space: drift',
     vec2(mainCanvasSize.x / 2, mainCanvasSize.y - 36),
