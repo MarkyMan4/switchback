@@ -13,9 +13,15 @@ import {
   keyIsDown,
   lerp,
   sign,
+  timeDelta,
   vec3,
 } from 'littlejsengine';
 import { MAP_SIZE, RIDE_HEIGHT, ROAD_WIDTH, roadDistance, terrain } from './hill.ts';
+
+export const TIRE_HEALTH_MAX = 100;
+const TIRE_DRAIN_PER_SEC = 20;
+const TIRE_DRAIN_DISTANCE = 10;
+const TIRE_DRAIN_MIN_SPEED = 0.02;
 
 const BODY = hsl(0.02, 0.82, 0.48);
 const CABIN = hsl(0.58, 0.15, 0.18);
@@ -37,10 +43,12 @@ export class Car extends EngineObject3D {
   boostLevel = 0;
   drifting = false;
   locked = false;
+  tireHealth = TIRE_HEALTH_MAX;
   slide = vec3();
   wheels: EngineObject3D[] = [];
   sparks: ParticleEmitter3D[] = [];
   flames: ParticleEmitter3D[] = [];
+  smoke: ParticleEmitter3D[] = [];
 
   constructor(pos: Vector3, yaw: number) {
     super(pos);
@@ -117,6 +125,33 @@ export class Car extends EngineObject3D {
       this.addChild(flames);
       this.flames.push(flames);
     }
+
+    for (const x of [-track, track]) {
+      const smoke = new ParticleEmitter3D(
+        vec3(x, 0.28, wheelbase),
+        0.35,
+        0,
+        0,
+        0.85,
+        undefined,
+        hsl(0.08, 0.05, 0.55, 0.5),
+        hsl(0.06, 0.04, 0.38, 0.4),
+        hsl(0.08, 0.02, 0.42, 0),
+        hsl(0.05, 0.02, 0.22, 0),
+        1.15,
+        0.32,
+        1.15,
+        0.018,
+        0.96,
+        0.006,
+        0.4,
+        0.4,
+        false,
+      );
+      smoke.castShadow = false;
+      this.addChild(smoke);
+      this.smoke.push(smoke);
+    }
   }
 
   update() {
@@ -162,6 +197,10 @@ export class Car extends EngineObject3D {
     this.speed *= offRoad < 0 ? (boosting ? 0.993 : 0.99) : 0.95;
     if (this.locked) this.speed *= 0.8;
     this.speed = clamp(this.speed, -0.12, maxFwd);
+    if (!this.locked && offRoad >= 0 && abs(this.speed) > TIRE_DRAIN_MIN_SPEED) {
+      const intensity = 1 + clamp(offRoad / TIRE_DRAIN_DISTANCE) * 2;
+      this.tireHealth = clamp(this.tireHealth - TIRE_DRAIN_PER_SEC * intensity * timeDelta, 0, TIRE_HEALTH_MAX);
+    }
 
     const inward = input.x * this.driftDir;
     const tightness = inward >= 0 ? lerp(0.4, 1.5, inward) : lerp(0.4, 0.06, -inward);
@@ -207,6 +246,18 @@ export class Car extends EngineObject3D {
     for (const flames of this.flames) {
       flames.emitRate = flameRate;
       flames.sizeStart = 0.24 + this.boostLevel * 0.16;
+    }
+
+    const worn = this.tireHealth < 50;
+    const critical = this.tireHealth < 10;
+    const smokeRate = !worn ? 0 : critical ? 110 : 48;
+    for (const smoke of this.smoke) {
+      smoke.emitRate = smokeRate;
+      smoke.sizeStart = critical ? 0.62 : 0.42;
+      smoke.sizeEnd = critical ? 2.1 : 1.55;
+      smoke.speed = critical ? 0.03 : 0.022;
+      smoke.colorStartA = hsl(0.08, 0.05, critical ? 0.42 : 0.58, critical ? 0.62 : 0.55);
+      smoke.colorStartB = hsl(0.06, 0.04, critical ? 0.22 : 0.42, critical ? 0.5 : 0.45);
     }
   }
 }
