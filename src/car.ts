@@ -19,8 +19,9 @@ import {
 import { MAP_SIZE, RIDE_HEIGHT, ROAD_WIDTH, roadDistance, terrain } from './hill.ts';
 
 export const TIRE_HEALTH_MAX = 100;
-const TIRE_DRAIN_PER_SEC = 8;
-const TIRE_DRAIN_DISTANCE = 18;
+const TIRE_DRAIN_PER_SEC = 20;
+const TIRE_DRAIN_DISTANCE = 10;
+const TIRE_DRAIN_MIN_SPEED = 0.02;
 
 const BODY = hsl(0.02, 0.82, 0.48);
 const CABIN = hsl(0.58, 0.15, 0.18);
@@ -156,10 +157,6 @@ export class Car extends EngineObject3D {
   update() {
     const input = keyDirection();
     const offRoad = roadDistance(this.pos3D.x, this.pos3D.z) - ROAD_WIDTH / 2;
-    if (!this.locked && offRoad >= 0) {
-      const intensity = 1 + clamp(offRoad / TIRE_DRAIN_DISTANCE) * 2;
-      this.tireHealth = clamp(this.tireHealth - TIRE_DRAIN_PER_SEC * intensity * timeDelta, 0, TIRE_HEALTH_MAX);
-    }
     if (this.locked) {
       input.x = 0;
       input.y = 0;
@@ -200,6 +197,10 @@ export class Car extends EngineObject3D {
     this.speed *= offRoad < 0 ? (boosting ? 0.993 : 0.99) : 0.95;
     if (this.locked) this.speed *= 0.8;
     this.speed = clamp(this.speed, -0.12, maxFwd);
+    if (!this.locked && offRoad >= 0 && abs(this.speed) > TIRE_DRAIN_MIN_SPEED) {
+      const intensity = 1 + clamp(offRoad / TIRE_DRAIN_DISTANCE) * 2;
+      this.tireHealth = clamp(this.tireHealth - TIRE_DRAIN_PER_SEC * intensity * timeDelta, 0, TIRE_HEALTH_MAX);
+    }
 
     const inward = input.x * this.driftDir;
     const tightness = inward >= 0 ? lerp(0.4, 1.5, inward) : lerp(0.4, 0.06, -inward);
